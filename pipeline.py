@@ -20,7 +20,7 @@ from pathlib import Path
 import baseline
 import llm
 import prompts
-from script_parser import load_show, to_transcript
+from script_parser import load_show_with_report, parse_report_md, to_transcript
 from validate import check, dedupe
 
 
@@ -33,7 +33,7 @@ def log(msg, cb=None):
 def run(input_dir, out_root="outputs", episodes=None, per_ep=3, montages=4, top_k=10, progress=None, repair=True, late_cap=2):
     model = llm.model_name()
     use_llm = model != "baseline"
-    show = load_show(input_dir)
+    show, parse_report = load_show_with_report(input_dir)
     if episodes:
         show = [e for e in show if episodes[0] <= e["ep"] <= episodes[1]]
     if not show:
@@ -45,6 +45,8 @@ def run(input_dir, out_root="outputs", episodes=None, per_ep=3, montages=4, top_
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     log(f"{len(show)} episodes | model={model} | output -> {out}", progress)
+    if not parse_report["ok"]:  # fail visibly: a new script format should not silently produce bad promos
+        log("WARNING input check found problems:\n" + parse_report_md(parse_report), progress)
 
     valid, rejected, errors = [], [], []
     stats = Counter()
@@ -127,14 +129,17 @@ def run(input_dir, out_root="outputs", episodes=None, per_ep=3, montages=4, top_
                 if clean:
                     clean["id"] = f"M{i}"
                     valid.append(clean)
+                    stats["montage_valid"] += 1
                 else:
-                    rejected.append({"id": f"M{i}", "reasons": notes, "llm_output": c})
+                    rejected.append({"id": f"M{i}", "stage": "montage", "reasons": notes, "llm_output": c})
+                stats["montage_total"] += 1
             log(f"  montages: {len(res.get('promos', []))} proposed", progress)
         except Exception as ex:
             errors.append({"step": "montages", "error": str(ex)[:500]})
 
     # 3) Remove near-duplicates (same moment found twice)
     promos, dupes = dedupe(valid)
+    stats["duplicates_removed"] = len(dupes)
     for d in dupes:
         rejected.append({"id": d["id"], "reasons": ["duplicate of a higher-scored promo"], "llm_output": d["title"]})
 
@@ -185,13 +190,43 @@ def run(input_dir, out_root="outputs", episodes=None, per_ep=3, montages=4, top_
         "model": model, "input": str(input_dir), "episodes": [e["ep"] for e in show],
         "seconds": round(time.time() - t0, 1), "valid": len(promos), "rejected": len(rejected),
         "errors": len(errors), "per_ep": per_ep, "montages": montages,
-        "validation": dict(stats), "repair": repair, "late_cap": late_cap})
+        "validation": dict(stats), "input_check": parse_report,
+        "parse_report": parse_report_md(parse_report), "repair": repair, "late_cap": late_cap})
     log(f"Done: {len(promos)} promos, {len(rejected)} rejected, {len(errors)} errors -> {out}", progress)
     return out, promos
 
 
 def seg_str(p):
     return " + ".join(f"Ep{s['ep']} {s['start']}-{s['end']}" for s in p["segments"])
+
+
+def funnel_md(v, rejected, final):
+    """One source of truth for every count in the run, so the numbers always reconcile."""
+    g = lambda k: v.get(k, 0)
+    failed = g("first_pass_total") - g("first_pass_valid")
+    singles = g("first_pass_valid") + g("repair_valid")
+    reasons = Counter()
+    for r in rejected:
+        if r.get("stage") == "first_pass":
+            for x in r["reasons"]:
+                for key, label in (("too short", "too short (<20s)"), ("too long", "too long (>60s)"),
+                                   ("hook lands", "hook after 3s"), ("past episode end", "timestamp outside episode"),
+                                   ("ends before", "end before start"), ("does not exist", "bad episode")):
+                    if key in x:
+                        reasons[label] += 1
+    lines = ["## Funnel (every count in this run)\n", "| Stage | Count |", "|---|---|",
+             f"| Episode picks proposed by the model (first pass) | {g('first_pass_total')} |",
+             f"| ...passed code checks | {g('first_pass_valid')} |",
+             f"| ...failed, sent back once with the reasons | {failed} |",
+             f"| Fixed picks the model returned (it may drop some) | {g('repair_total')} |",
+             f"| ...passed code checks | {g('repair_valid')} |",
+             f"| Single-episode promos (first pass + fixed) | {singles} |",
+             f"| Montages proposed / passed | {g('montage_total')} / {g('montage_valid')} |",
+             f"| Removed as near-duplicates (>60% overlap) | {g('duplicates_removed')} |",
+             f"| **Final promos** ({singles} + {g('montage_valid')} - {g('duplicates_removed')}) | **{final}** |\n",
+             "First-pass failure reasons (one pick can fail several checks): "
+             + (", ".join(f"{k} {n}" for k, n in reasons.most_common()) or "none") + "\n"]
+    return "\n".join(lines)
 
 
 def write_outputs(out, promos, rejected, errors, meta):
@@ -219,10 +254,8 @@ def write_outputs(out, promos, rejected, errors, meta):
     md = [f"# Promo report\n", f"Model: `{meta['model']}` | episodes: {len(meta['episodes'])} | "
           f"valid promos: {meta['valid']} | rejected: {meta['rejected']} | errors: {meta['errors']} | "
           f"time: {meta['seconds']}s\n",
-          "Episode picks passing the code checks: first pass {first_pass_valid}/{first_pass_total}; "
-          "after one fix-and-retry pass {repair_valid}/{repair_total} repaired picks passed.\n".format(
-              **{k: meta.get("validation", {}).get(k, 0) for k in
-                 ("first_pass_valid", "first_pass_total", "repair_valid", "repair_total")}),
+          meta.get("parse_report", ""),
+          funnel_md(meta.get("validation", {}), rejected, meta["valid"]),
           "## Ranked promos\n"]
     for p in promos:
         md += [f"### {p['rank']}. {p['title']} (`{p['id']}`, {p['duration_s']}s"
