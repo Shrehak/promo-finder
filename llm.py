@@ -32,7 +32,7 @@ def _load_dotenv(path: Path = Path(__file__).with_name(".env")):
 
 
 _load_dotenv()
-CACHE_DIR = Path(os.getenv("LLM_CACHE_DIR", ".llm_cache"))
+CACHE_DIR = Path(os.getenv("LLM_CACHE_DIR", Path(__file__).with_name(".llm_cache")))  # next to the code
 OPENAI_COMPAT = {
     "openai": ("https://api.openai.com/v1", "OPENAI_API_KEY"),
     "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY"),
