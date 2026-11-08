@@ -1,0 +1,7 @@
+data/
+*.zip
+outputs/
+.llm_cache/
+.env
+__pycache__/
+.streamlit/secrets.toml
