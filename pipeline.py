@@ -287,5 +287,8 @@ if __name__ == "__main__":
     rng = tuple(int(x) for x in a.episodes.split("-")) if a.episodes else None
     if rng and len(rng) == 1:
         rng = (rng[0], rng[0])
-    run(a.input, a.out, rng, a.per_ep, a.montages, a.top, repair=not a.no_repair,
-        late_cap=None if a.late_cap < 0 else a.late_cap)
+    try:
+        run(a.input, a.out, rng, a.per_ep, a.montages, a.top, repair=not a.no_repair,
+            late_cap=None if a.late_cap < 0 else a.late_cap)
+    except llm.ConfigError as ex:
+        raise SystemExit(f"Config error: {ex}")
