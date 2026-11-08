@@ -16,8 +16,8 @@ st.title("Promo Finder")
 st.caption("Reads microdrama screenplays and finds 20-60s promo clips: hook in the first 3s, ends on a cliffhanger.")
 
 with st.sidebar:
-    model = st.text_input("Model", os.getenv("MODEL", "gemini/gemini-flash-latest"),
-                          help="provider/model, e.g. gemini/gemini-flash-latest, groq/llama-3.3-70b-versatile, "
+    model = st.text_input("Model", os.getenv("MODEL", "gemini/gemini-flash-lite-latest"),
+                          help="provider/model, e.g. gemini/gemini-flash-lite-latest (free, default), groq/llama-3.3-70b-versatile, "
                                "openai/gpt-4o-mini, anthropic/claude-sonnet-5-5, or 'baseline' (no AI)")
     key = st.text_input("API key (if not set in secrets)", type="password")
     per_ep = st.slider("Candidates per episode", 1, 5, 3)

@@ -26,7 +26,7 @@ Outputs go to `outputs/<time>_<model>/`:
 - `run_meta.json`
 
 ## Swap the model (one env var)
-`MODEL=gemini/gemini-flash-latest` (default) · `gemini/gemini-flash-lite-latest` (fast) · `groq/llama-3.3-70b-versatile` · `openai/gpt-4o-mini` ·
+`MODEL=gemini/gemini-flash-lite-latest` (default, generous free tier) · `gemini/gemini-flash-latest` (stronger; free tier only 20 requests/day) · `groq/llama-3.3-70b-versatile` · `openai/gpt-4o-mini` ·
 `anthropic/claude-sonnet-5-5` · `openrouter/<id>` · `ollama/<local>` · `compat/<model>` with `LLM_BASE_URL` + `LLM_API_KEY`
 (any OpenAI-compatible endpoint) · `baseline` (no AI). Every call goes through `llm.call()` in `llm.py`.
 

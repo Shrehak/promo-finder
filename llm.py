@@ -1,7 +1,7 @@
 """One function, any model: call(prompt) -> dict (parsed JSON).
 
 Swap models with one env var, no code change:
-  MODEL=gemini/gemini-flash-latest        (free tier, key: GEMINI_API_KEY)
+  MODEL=gemini/gemini-flash-lite-latest   (default; free tier, key: GEMINI_API_KEY)
   MODEL=groq/llama-3.3-70b-versatile      (free tier, key: GROQ_API_KEY)
   MODEL=openrouter/<any model id>         (key: OPENROUTER_API_KEY)
   MODEL=openai/gpt-4o-mini                (key: OPENAI_API_KEY)
@@ -56,7 +56,7 @@ def _key(env: str) -> str:
 
 
 def model_name() -> str:
-    return os.getenv("MODEL", "gemini/gemini-flash-latest")
+    return os.getenv("MODEL", "gemini/gemini-flash-lite-latest")
 
 
 def _post(url: str, body: dict, headers: dict) -> dict:
